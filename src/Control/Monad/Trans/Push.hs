@@ -50,7 +50,7 @@ instance Monad m => Monad (PushT v p m) where
 -- | This seems *highly* questionable, but appears to get the job done.
 {-# INLINE liftST #-}
 liftST :: Applicative m => ST s a -> STT s m a
-liftST (ST f) = STT (\s -> let (# s', a #) = f s in pure (STTRet s a))
+liftST (ST f) = STT (\s -> let (# s', a #) = f s in pure (STTRet s' a))
 
 instance (Monad m, VGM.MVector v p) => MonadPush p (PushT v p m) where
     {-# INLINE push #-}

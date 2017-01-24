@@ -1,12 +1,11 @@
--- ReaderT style
--- 100M in ~3.6 seconds
--- 4.55G allocated
+-- Hybrid ReaderT/StateT style
+-- 100M Ints in ~3.1 seconds
+-- 2.95G allocated. Seems to match minimal ST loop
 
 {-# LANGUAGE TypeApplications, RankNTypes, MultiParamTypeClasses, GeneralizedNewtypeDeriving, DeriveFunctor, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
 
-module MonadPush2 where
+module Control.Monad.Push where
 
-import Control.Monad.Trans.Reader (ReaderT, ask)
 import Control.Monad.ST (ST, runST)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
@@ -17,31 +16,33 @@ import qualified Data.Vector.Generic.Mutable as VGM
 import Data.STRef.Strict (STRef, readSTRef, writeSTRef, newSTRef)
 import qualified Data.STRef.Strict as Ref
 import qualified Data.Foldable as Foldable
+import Control.Monad.Push.Class (MonadPush, push)
 
-class Monad m => MonadPush a m where
-    push :: a -> m ()
+-- | The internal return type of a push action.
+-- The Int value is the new vector used length.
+data Res a = Res !Int
+                 !a deriving Functor
 
-
-newtype Push v p a = Push (forall s . (STRef s Int) -> (STRef s (v s p)) -> (ST s a)) deriving (Functor)
+-- | A monad  that lets you push things onto a stack.
+newtype Push v p a = Push (forall s . Int -> (STRef s (v s p)) -> (ST s (Res a))) deriving (Functor)
 
 instance Applicative (Push v p) where
-    {-# INLINEABLE pure #-}
-    pure a = Push $ \u v -> (return a)
-    {-# INLINEABLE (<*>) #-}
-    (Push f) <*> (Push g) = Push $ \u v -> f u v <*> g u v
+    {-# INLINE pure #-}
+    pure a = Push $ \u v -> (return (Res u a))
+    {-# INLINE (<*>) #-}
+    (Push f) <*> (Push g) = Push $ \u v -> f u v >>= (\(Res u' o1) -> g u' v >>= (\(Res u'' o2) -> return (Res u'' (o1 o2))))
 
 instance Monad (Push v p) where
-    {-# INLINEABLE return #-}
+    {-# INLINE return #-}
     return = pure
-    {-# INLINEABLE (>>=) #-}
-    Push g >>= f = Push $ \u v -> ((g u v) >>= (\x -> let Push h = f x in h u v))
-    {-# INLINEABLE (>>) #-}
-    Push g >> Push h = Push $ \u v -> g u v >> h u v
+    {-# INLINE (>>=) #-}
+    Push g >>= f = Push $ \u v -> ((g u v) >>= (\(Res u' x) -> let Push h = f x in h u' v))
+    {-# INLINE (>>) #-}
+    Push g >> Push h = Push $ \u v -> g u v >>= (\(Res u' _) -> h u' v)
 
 instance VGM.MVector v p => MonadPush p (Push v p) where
-    {-# INLINABLE push #-}
-    push a = Push $ \used' vec' -> do
-        used <- readSTRef used'
+    {-# INLINE push #-}
+    push a = Push $ \used vec' -> do
         vec <- readSTRef vec'
         if (VGM.length vec == used) 
             then do
@@ -50,38 +51,28 @@ instance VGM.MVector v p => MonadPush p (Push v p) where
                 writeSTRef vec' bigger
             else do
                 VGM.write vec used a
-        writeSTRef used' (used + 1)
+        return $ Res (used+1) ()
 
-{-# SPECIALIZE runPush :: Push (VU.MVector) Int a -> (a, VU.Vector Int) #-}
+-- | Run the Push monad. Get the return value and the output stack.
+{-# INLINE runPush #-}
 runPush :: VG.Vector v p => Push (VG.Mutable v) p a -> (a, v p)
 runPush (Push action) = runST $ do
     initial <- VGM.new 1
     vecRef <- newSTRef initial
-    usedRef <- newSTRef 0
-    out <- action usedRef vecRef
+    (Res used out) <- action 0 vecRef
     final <- readSTRef vecRef
-    used <- readSTRef usedRef
     vec <- VG.freeze (VGM.slice 0 used final)
     return (out, vec)
 
-
+-- | Specialized to Unboxed vectors.
+{-# INLINE runPushU #-}
 runPushU :: forall p a . VU.Unbox p => Push (VU.MVector) p a -> (a, VU.Vector p)
 runPushU = runPush
-
+-- | Specialized to standard Boxed vectors.
+{-# INLINE runPushB #-}
 runPushB :: forall p a . Push (V.MVector) p a -> (a, V.Vector p)
 runPushB = runPush
-
+-- | Specialized to Storable vectors.
+{-# INLINE runPushS #-}
 runPushS :: forall p a . VS.Storable p => Push (VS.MVector) p a -> (a, VS.Vector p)
 runPushS = runPush
-
-test :: forall m . MonadPush Int m => m ()
-test = go 100000000
-    where
-    go :: Int -> m ()
-    go 0 = push (5 :: Int)
-    go n = push (5 :: Int) >> go (n-1)
-
--- runU :: 
-ioTest :: IO ()
-ioTest = print $ VG.length $ snd $ runPushU @Int $ test
-

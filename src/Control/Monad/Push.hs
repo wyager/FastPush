@@ -10,12 +10,9 @@ import Control.Monad.ST (ST, runST)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Unboxed as VU
-import qualified Control.Monad.Trans.Class as Trans
 import qualified Data.Vector.Generic         as VG
 import qualified Data.Vector.Generic.Mutable as VGM
 import Data.STRef.Strict (STRef, readSTRef, writeSTRef, newSTRef)
-import qualified Data.STRef.Strict as Ref
-import qualified Data.Foldable as Foldable
 import Control.Monad.Push.Class (MonadPush, push)
 
 -- | The internal return type of a push action.
@@ -28,7 +25,7 @@ newtype Push v p a = Push (forall s . Int -> (STRef s (v s p)) -> (ST s (Res a))
 
 instance Applicative (Push v p) where
     {-# INLINE pure #-}
-    pure a = Push $ \u v -> (return (Res u a))
+    pure a = Push $ \u _ -> (return (Res u a))
     {-# INLINE (<*>) #-}
     (Push f) <*> (Push g) = Push $ \u v -> f u v >>= (\(Res u' o1) -> g u' v >>= (\(Res u'' o2) -> return (Res u'' (o1 o2))))
 

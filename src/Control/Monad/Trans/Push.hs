@@ -11,15 +11,11 @@ module Control.Monad.Trans.Push where
 import Control.Monad.ST.Trans (runST, STRef, readSTRef, writeSTRef, newSTRef)
 import Control.Monad.ST.Trans.Internal (STT(STT), STTRet(STTRet))
 import GHC.ST (ST(ST))
-import Control.Monad.Identity (Identity, runIdentity)
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Unboxed as VU
-import qualified Control.Monad.Trans.Class as Trans
 import qualified Data.Vector.Generic         as VG
 import qualified Data.Vector.Generic.Mutable as VGM
-import qualified Data.STRef.Strict as Ref
-import qualified Data.Foldable as Foldable
 import Control.Monad.Push.Class (MonadPush, push)
 
 -- | The internal return type of a push action.
@@ -35,7 +31,7 @@ deriving instance Functor m => Functor (PushT v p m)
 
 instance Monad m => Applicative (PushT v p m) where
     {-# INLINE pure #-}
-    pure a = PushT $ \u v -> (return (Res u a))
+    pure a = PushT $ \u _ -> (return (Res u a))
     {-# INLINE (<*>) #-}
     (PushT f) <*> (PushT g) = PushT $ \u v -> f u v >>= (\(Res u' o1) -> g u' v >>= (\(Res u'' o2) -> return (Res u'' (o1 o2))))
 

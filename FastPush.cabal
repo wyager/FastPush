@@ -22,7 +22,7 @@ library
   exposed-modules:     Control.Monad.Push.Example, Control.Monad.Push, Control.Monad.Push.Class, Control.Monad.Trans.Push
   -- other-modules:       
   other-extensions:    FlexibleContexts, ScopedTypeVariables, TypeApplications, RankNTypes, MultiParamTypeClasses, GeneralizedNewtypeDeriving, DeriveFunctor, FlexibleInstances, StandaloneDeriving, UnboxedTuples
-  build-depends:       base >=4.9 && <4.10, vector >=0.11 && <0.13, STMonadTrans >=0.3 && <0.4
+  build-depends:       base >=4.9 && <4.10, vector >=0.11 && <0.13, STMonadTrans >=0.3 && <0.5
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -O2 -W
